@@ -26,7 +26,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            git python3 cmake ninja-build clang-18 lld-18 build-essential pkg-config \
+            git python3 python3-venv cmake ninja-build clang-18 lld-18 build-essential pkg-config \
             curl zip unzip autoconf automake libtool libgtk-3-dev libx11-dev \
             libxrandr-dev libxcursor-dev libxi-dev libxinerama-dev libxext-dev \
             libxkbcommon-dev libwayland-dev wayland-protocols libdecor-0-dev \
@@ -34,6 +34,13 @@ jobs:
             libssl-dev libvulkan-dev nasm
           echo "CC=clang-18" >> "$GITHUB_ENV"
           echo "CXX=clang++-18" >> "$GITHUB_ENV"
+
+      - name: Install current CMake
+        run: |
+          python3 -m venv "$RUNNER_TEMP/cmake-venv"
+          "$RUNNER_TEMP/cmake-venv/bin/pip" install --upgrade pip
+          "$RUNNER_TEMP/cmake-venv/bin/pip" install "cmake>=3.31,<4"
+          echo "$RUNNER_TEMP/cmake-venv/bin" >> "$GITHUB_PATH"
 
       - name: Prepare repository
         run: python3 tools/setup_repo.py
@@ -92,10 +99,20 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            git python3 cmake ninja-build clang-18 lld-18 build-essential pkg-config \
+            git python3 python3-venv cmake ninja-build clang-18 lld-18 build-essential pkg-config \
             curl zip unzip autoconf automake libtool nasm
           echo "CC=clang-18" >> "$GITHUB_ENV"
           echo "CXX=clang++-18" >> "$GITHUB_ENV"
+
+      - name: Install current CMake
+        run: |
+          python3 -m venv "$RUNNER_TEMP/cmake-venv"
+          "$RUNNER_TEMP/cmake-venv/bin/pip" install --upgrade pip
+          "$RUNNER_TEMP/cmake-venv/bin/pip" install "cmake>=3.31,<4"
+          echo "$RUNNER_TEMP/cmake-venv/bin" >> "$GITHUB_PATH"
+
+      - name: Set up Android command-line tools
+        uses: android-actions/setup-android@v3
 
       - name: Install Android SDK/NDK requirements
         run: |

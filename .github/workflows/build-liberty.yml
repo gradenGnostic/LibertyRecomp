@@ -115,16 +115,17 @@ jobs:
           "$RUNNER_TEMP/cmake-venv/bin/pip" install "cmake>=3.31,<4"
           echo "$RUNNER_TEMP/cmake-venv/bin" >> "$GITHUB_PATH"
 
-      - name: Set up Android command-line tools
-        uses: android-actions/setup-android@v3
-
       - name: Install Android SDK/NDK requirements
         run: |
-          yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager "platforms;android-34" "build-tools;34.0.0" "ndk;27.2.12479018" "cmake;3.31.4"
-          echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> "$GITHUB_ENV"
-          echo "ANDROID_NDK=$ANDROID_SDK_ROOT/ndk/27.2.12479018" >> "$GITHUB_ENV"
-          echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/27.2.12479018" >> "$GITHUB_ENV"
+          SDKROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
+          SDKMANAGER="$(find "$SDKROOT/cmdline-tools" -type f -name sdkmanager | sort -V | tail -n1)"
+          test -x "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platforms;android-34" "build-tools;34.0.0" "ndk;27.2.12479018" "cmake;3.31.4"
+          echo "ANDROID_HOME=$SDKROOT" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDKROOT" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK=$SDKROOT/ndk/27.2.12479018" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_HOME=$SDKROOT/ndk/27.2.12479018" >> "$GITHUB_ENV"
 
       - name: Prepare repository
         run: python3 tools/setup_repo.py

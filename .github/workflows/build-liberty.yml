@@ -1,0 +1,131 @@
+name: Build LibertyRecomp Linux + Android
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - ".github/workflows/build-liberty.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linux-x86_64:
+    name: Linux x86-64
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            git python3 cmake ninja-build clang-18 lld-18 build-essential pkg-config \
+            curl zip unzip autoconf automake libtool libgtk-3-dev libx11-dev \
+            libxrandr-dev libxcursor-dev libxi-dev libxinerama-dev libxext-dev \
+            libxkbcommon-dev libwayland-dev wayland-protocols libdecor-0-dev \
+            libasound2-dev libpulse-dev libdbus-1-dev libusb-1.0-0-dev \
+            libssl-dev libvulkan-dev nasm
+          echo "CC=clang-18" >> "$GITHUB_ENV"
+          echo "CXX=clang++-18" >> "$GITHUB_ENV"
+
+      - name: Prepare repository
+        run: python3 tools/setup_repo.py
+
+      - name: Configure
+        run: cmake --preset linux-release
+
+      - name: Build
+        run: cmake --build --preset linux-release --target LibertyRecomp --parallel 2
+
+      - name: Collect Linux runtime
+        run: |
+          set -eux
+          mkdir -p dist/linux
+          echo "=== executable candidates ==="
+          find out/build/linux-release -maxdepth 5 -type f -perm -111 -print || true
+          BIN="$(find out/build/linux-release -type f -name 'LibertyRecomp' -perm -111 | head -n1)"
+          if [ -z "$BIN" ]; then
+            BIN="$(find out/build/linux-release -type f -iname 'Liberty*' -perm -111 | head -n1)"
+          fi
+          test -n "$BIN"
+          cp -av "$BIN" dist/linux/
+          ldd "$BIN" | tee dist/linux/ldd.txt || true
+          BIN_DIR="$(dirname "$BIN")"
+          find "$BIN_DIR" -maxdepth 1 -type f \( -name '*.so' -o -name '*.so.*' \) -exec cp -av {} dist/linux/ \; || true
+          cp -av README.md dist/linux/ || true
+          tar -C dist -czf LibertyRecomp-linux-x86_64.tar.gz linux
+          ls -lh LibertyRecomp-linux-x86_64.tar.gz
+
+      - name: Upload Linux build
+        uses: actions/upload-artifact@v4
+        with:
+          name: LibertyRecomp-linux-x86_64
+          path: LibertyRecomp-linux-x86_64.tar.gz
+          if-no-files-found: error
+          compression-level: 0
+
+  android-arm64:
+    name: Android ARM64 APK
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install host dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            git python3 cmake ninja-build clang-18 lld-18 build-essential pkg-config \
+            curl zip unzip autoconf automake libtool nasm
+          echo "CC=clang-18" >> "$GITHUB_ENV"
+          echo "CXX=clang++-18" >> "$GITHUB_ENV"
+
+      - name: Install Android SDK/NDK requirements
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-34" "build-tools;34.0.0" "ndk;27.2.12479018" "cmake;3.31.4"
+          echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK=$ANDROID_SDK_ROOT/ndk/27.2.12479018" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/27.2.12479018" >> "$GITHUB_ENV"
+
+      - name: Prepare repository
+        run: python3 tools/setup_repo.py
+
+      - name: Build debug APK
+        working-directory: os/android
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleDebug
+
+      - name: Collect APK
+        run: |
+          set -eux
+          APK="os/android/app/build/outputs/apk/debug/app-debug.apk"
+          test -f "$APK"
+          cp "$APK" LibertyRecomp-A25-arm64-v8a-debug.apk
+          ls -lh LibertyRecomp-A25-arm64-v8a-debug.apk
+
+      - name: Upload Android APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: LibertyRecomp-A25-arm64-v8a-debug
+          path: LibertyRecomp-A25-arm64-v8a-debug.apk
+          if-no-files-found: error
+          compression-level: 0

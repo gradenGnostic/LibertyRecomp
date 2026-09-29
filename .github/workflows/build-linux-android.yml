@@ -10,7 +10,7 @@ permissions:
 jobs:
   linux-x86_64:
     name: Linux x86-64
-    if: github.event_name != 'pull_request'
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.title, '[linux]')
     runs-on: ubuntu-24.04
     timeout-minutes: 330
     env:
@@ -30,7 +30,7 @@ jobs:
             curl zip unzip autoconf automake libtool libgtk-3-dev libx11-dev libxrandr-dev \
             libxcursor-dev libxi-dev libxinerama-dev libxext-dev libxkbcommon-dev libwayland-dev \
             wayland-protocols libdecor-0-dev libasound2-dev libpulse-dev libdbus-1-dev \
-            libusb-1.0-0-dev libssl-dev libvulkan-dev nasm
+            libusb-1.0-0-dev libssl-dev libvulkan-dev libxss-dev nasm
           python3 -m pip install --user --break-system-packages "cmake>=3.31,<4"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
@@ -86,6 +86,7 @@ jobs:
 
   android-arm64:
     name: Android ARM64 (Galaxy A25)
+    if: github.event_name == 'workflow_dispatch' || !contains(github.event.pull_request.title, '[linux]')
     runs-on: ubuntu-24.04
     timeout-minutes: 330
     env:

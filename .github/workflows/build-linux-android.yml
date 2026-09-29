@@ -3,9 +3,6 @@ name: Build LibertyRecomp Linux + Android
 on:
   workflow_dispatch:
   pull_request:
-  push:
-    paths:
-      - ".github/workflows/build-linux-android.yml"
 
 permissions:
   contents: read
@@ -13,6 +10,7 @@ permissions:
 jobs:
   linux-x86_64:
     name: Linux x86-64
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 330
     env:
@@ -140,8 +138,9 @@ jobs:
       - name: Build debug APK
         working-directory: os/android
         run: |
-          chmod +x gradlew
-          ./gradlew --no-daemon assembleDebug
+          curl -fL --retry 3 https://services.gradle.org/distributions/gradle-8.11.1-bin.zip -o /tmp/gradle.zip
+          unzip -q /tmp/gradle.zip -d /tmp
+          /tmp/gradle-8.11.1/bin/gradle --no-daemon assembleDebug
 
       - name: Collect APK
         run: |

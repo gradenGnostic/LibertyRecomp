@@ -10,6 +10,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: build-liberty-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   linux-x86_64:
     name: Linux x86-64

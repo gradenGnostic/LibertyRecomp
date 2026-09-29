@@ -112,6 +112,9 @@ jobs:
             git python3 ninja-build clang-18 lld-18 build-essential pkg-config \
             curl zip unzip autoconf automake libtool nasm
 
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
       - name: Install Android SDK/NDK/CMake
         run: |
           yes | sdkmanager --licenses >/dev/null || true

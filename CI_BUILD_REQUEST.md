@@ -9,3 +9,5 @@ Retry Android after installing cmdline-tools.
 Retry Android using the runner sdkmanager directly.
 
 Retry Android using standalone Gradle 8.11.1.
+
+Retry Android after chrono compatibility patch.

@@ -1,0 +1,165 @@
+name: Build LibertyRecomp Linux + Android
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/build-linux-android.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  linux-x86_64:
+    name: Linux x86-64
+    runs-on: ubuntu-24.04
+    timeout-minutes: 330
+    env:
+      CC: clang-18
+      CXX: clang++-18
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            git python3 python3-pip ninja-build clang-18 lld-18 build-essential pkg-config \
+            curl zip unzip autoconf automake libtool libgtk-3-dev libx11-dev libxrandr-dev \
+            libxcursor-dev libxi-dev libxinerama-dev libxext-dev libxkbcommon-dev libwayland-dev \
+            wayland-protocols libdecor-0-dev libasound2-dev libpulse-dev libdbus-1-dev \
+            libusb-1.0-0-dev libssl-dev libvulkan-dev nasm
+          python3 -m pip install --user --break-system-packages "cmake>=3.31,<4"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Show tool versions
+        run: |
+          cmake --version
+          clang-18 --version
+          ninja --version
+          python3 --version
+
+      - name: Prepare repository dependencies
+        run: python3 tools/setup_repo.py
+
+      - name: Configure Linux release
+        run: cmake --preset linux-release
+
+      - name: Build Linux release
+        run: cmake --build --preset linux-release --target LibertyRecomp --parallel 2
+
+      - name: Package Linux build
+        run: |
+          set -euxo pipefail
+          mkdir -p dist/linux
+          BIN="$(find out/build/linux-release -type f -name 'LibertyRecomp' -perm -111 | head -n 1)"
+          if [ -z "$BIN" ]; then
+            echo "LibertyRecomp executable not found"
+            find out/build/linux-release -maxdepth 4 -type f | sort | tail -n 300
+            exit 1
+          fi
+          cp -v "$BIN" dist/linux/
+          BINDIR="$(dirname "$BIN")"
+          find "$BINDIR" -maxdepth 1 -type f \( -name '*.so' -o -name '*.so.*' \) -exec cp -av {} dist/linux/ \; || true
+          cp -v README.md dist/linux/README-LibertyRecomp.md
+          tar -C dist/linux -czf dist/LibertyRecomp-linux-x86_64.tar.gz .
+
+      - name: Upload Linux build
+        uses: actions/upload-artifact@v4
+        with:
+          name: LibertyRecomp-linux-x86_64
+          path: dist/LibertyRecomp-linux-x86_64.tar.gz
+          if-no-files-found: error
+          compression-level: 0
+
+      - name: Upload Linux failure logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: LibertyRecomp-linux-build-logs
+          path: |
+            out/build/linux-release/**/*.log
+            out/build/linux-release/CMakeCache.txt
+          if-no-files-found: ignore
+
+  android-arm64:
+    name: Android ARM64 (Galaxy A25)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 330
+    env:
+      ANDROID_NDK_VERSION: 27.2.12479018
+      ANDROID_CMAKE_VERSION: 3.31.4
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install host dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            git python3 ninja-build clang-18 lld-18 build-essential pkg-config \
+            curl zip unzip autoconf automake libtool nasm
+
+      - name: Install Android SDK/NDK/CMake
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager \
+            "platform-tools" \
+            "platforms;android-34" \
+            "build-tools;34.0.0" \
+            "ndk;${ANDROID_NDK_VERSION}" \
+            "cmake;${ANDROID_CMAKE_VERSION}"
+          echo "ANDROID_NDK=$ANDROID_SDK_ROOT/ndk/${ANDROID_NDK_VERSION}" >> "$GITHUB_ENV"
+          echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> "$GITHUB_ENV"
+
+      - name: Verify Android toolchain
+        run: |
+          java -version
+          "$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/clang" --version
+          "$ANDROID_SDK_ROOT/cmake/${ANDROID_CMAKE_VERSION}/bin/cmake" --version
+
+      - name: Prepare repository dependencies
+        run: python3 tools/setup_repo.py
+
+      - name: Build debug APK
+        working-directory: os/android
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleDebug
+
+      - name: Collect APK
+        run: |
+          set -euxo pipefail
+          mkdir -p dist/android
+          cp -v os/android/app/build/outputs/apk/debug/app-debug.apk \
+            dist/android/LibertyRecomp-A25-arm64-v8a-debug.apk
+
+      - name: Upload Android APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: LibertyRecomp-A25-arm64-v8a-debug
+          path: dist/android/LibertyRecomp-A25-arm64-v8a-debug.apk
+          if-no-files-found: error
+          compression-level: 0
+
+      - name: Upload Android failure logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: LibertyRecomp-android-build-logs
+          path: |
+            os/android/**/build/**/*.log
+            out/build/android-*/**/*.log
+            out/build/android-*/CMakeCache.txt
+          if-no-files-found: ignore
